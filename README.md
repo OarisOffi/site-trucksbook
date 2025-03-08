@@ -4,4 +4,4 @@ Ensuite vous vous trouverz ici : ![image](https://github.com/user-attachments/as
 
 Cliquez sur sélectionnez un fichier CSV et mettez votre fichier.
 
-Ensuite vous aurez ceci : ![image](https://github.com/user-attachments/assets/04000569-afdc-4a5a-92d2-522bc7458e29) ceci voudras dire que vous aurez réussi et vous aurez accès au données.
+Ensuite vous aurez ceci : ![image](https://github.com/user-attachments/assets/04000569-afdc-4a5a-92d2-522bc7458e29) Ceci voudras dire que vous aurez réussi et vous aurez accès au données.
