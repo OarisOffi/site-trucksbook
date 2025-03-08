@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lecteur CSV - Euro Truck Simulator 2</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Lecteur CSV - Euro Truck Simulator 2</h1>
+        
+        <div class="upload-section">
+            <h2>Importez vos données ETS2</h2>
+            <label for="csvFile" class="file-label">
+                Sélectionner un fichier CSV
+            </label>
+            <input type="file" id="csvFile" accept=".csv">
+        </div>
+
+        <div class="info">
+            <h3>📝 Instructions :</h3>
+            <ol>
+                <li>Cliquez sur le bouton "Sélectionner un fichier CSV"</li>
+                <li>Choisissez votre fichier de données ETS2</li>
+                <li>Visualisez vos données dans le tableau interactif ci-dessous</li>
+            </ol>
+        </div>
+
+        <div class="filter-section">
+            <h3>Sélectionner le jeu :</h3>
+            <div class="game-filters">
+                <label class="radio-label">
+                    <input type="radio" name="gameFilter" value="all" checked>
+                    Tous les jeux
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="gameFilter" value="ets2">
+                    ETS2
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="gameFilter" value="ats">
+                    ATS
+                </label>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table id="csvTable">
+                <thead>
+                    <tr id="headerRow"></tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        function formatDate(dateStr) {
+            const dateRegex = /^(\d{4})-(\d{2})-(\d{2})$/;
+            if (dateRegex.test(dateStr)) {
+                const [_, year, month, day] = dateStr.match(dateRegex);
+                return `${day}/${month}/${year}`;
+            }
+            return dateStr;
+        }
+
+        function secondsToMinutes(seconds) {
+            if (isNaN(seconds)) return "-";
+            const minutes = Math.round(seconds / 60);
+            return `${minutes} min`;
+        }
+
+        function formatConsumption(value) {
+            if (!value) return value;
+            const match = value.match(/(\d+(?:[.,]\d+)?)\s*l/i);
+            if (match) {
+                return match[1].replace(',', '.') + 'L/100 km';
+            }
+            return value;
+        }
+
+        function cleanLicensePlate(plate) {
+            if (!plate) return plate;
+            return plate.replace(/^[a-zA-Z]+:/i, '').replace(/\.$/, '');
+        }
+
+        function parseCSVLine(line) {
+            const cells = [];
+            let currentCell = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"' && !inQuotes) {
+                    inQuotes = true;
+                    continue;
+                }
+                
+                if (char === '"' && inQuotes) {
+                    if (i + 1 < line.length && line[i + 1] === '"') {
+                        currentCell += '"';
+                        i++;
+                    } else {
+                        inQuotes = false;
+                    }
+                    continue;
+                }
+                
+                if (char === ',' && !inQuotes) {
+                    cells.push(currentCell.trim());
+                    currentCell = '';
+                    continue;
+                }
+                
+                currentCell += char;
+            }
+            
+            cells.push(currentCell.trim());
+            return cells;
+        }
+
+        let currentData = [];
+
+        function displayFilteredData(gameFilter) {
+            const tableBody = document.getElementById('tableBody');
+            tableBody.innerHTML = '';
+            
+            currentData.forEach(rowData => {
+                const gameType = determineGameType(rowData);
+                const firstColumnValue = rowData[0];
+                const selectedFirstColumn = document.querySelector('input[name="firstColumnFilter"]:checked')?.value || 'all';
+                
+                if ((gameFilter === 'all' || gameFilter === gameType) && 
+                    (selectedFirstColumn === 'all' || selectedFirstColumn === firstColumnValue)) {
+                    const row = document.createElement('tr');
+                    rowData.forEach(cell => {
+                        const td = document.createElement('td');
+                        td.textContent = cell;
+                        row.appendChild(td);
+                    });
+                    tableBody.appendChild(row);
+                }
+            });
+        }
+
+        function updateFirstColumnFilters() {
+            // Supprimer l'ancienne section de filtres si elle existe
+            const existingFilterSection = document.querySelector('.first-column-section');
+            if (existingFilterSection) {
+                existingFilterSection.remove();
+            }
+
+            // Créer une nouvelle section de filtres
+            const filterSection = document.createElement('div');
+            filterSection.className = 'filter-section first-column-section';
+            
+            const title = document.createElement('h3');
+            title.textContent = 'Filtrer par première colonne :';
+            filterSection.appendChild(title);
+            
+            const filtersDiv = document.createElement('div');
+            filtersDiv.className = 'game-filters first-column-filters';
+            
+            // Obtenir les valeurs uniques de la première colonne
+            const uniqueValues = [...new Set(currentData.map(row => row[0]))].sort();
+            
+            // Créer les boutons radio
+            const allLabel = document.createElement('label');
+            allLabel.className = 'radio-label';
+            allLabel.innerHTML = `
+                <input type="radio" name="firstColumnFilter" value="all" checked>
+                Tous
+            `;
+            filtersDiv.appendChild(allLabel);
+            
+            uniqueValues.forEach(value => {
+                const label = document.createElement('label');
+                label.className = 'radio-label';
+                label.innerHTML = `
+                    <input type="radio" name="firstColumnFilter" value="${value}">
+                    ${value}
+                `;
+                filtersDiv.appendChild(label);
+            });
+            
+            filterSection.appendChild(filtersDiv);
+            
+            // Insérer après les filtres de jeu
+            const gameFiltersSection = document.querySelector('.game-filters').parentNode;
+            gameFiltersSection.parentNode.insertBefore(filterSection, gameFiltersSection.nextSibling);
+            
+            // Ajouter les écouteurs d'événements
+            document.querySelectorAll('input[name="firstColumnFilter"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    const gameFilter = document.querySelector('input[name="gameFilter"]:checked').value;
+                    displayFilteredData(gameFilter);
+                });
+            });
+        }
+
+        function determineGameType(rowData) {
+            // Détermine le type de jeu en fonction des données de la ligne
+            const rowString = rowData.join(' ').toLowerCase();
+            
+            // Mots-clés pour les villes et états
+            const atsKeywords = ['california', 'nevada', 'arizona', 'new mexico', 'oregon', 'washington', 'idaho', 'utah', 
+                'colorado', 'wyoming', 'montana', 'texas', 'oklahoma', 'kansas', 'usd', '$', 'albuquerque', 'fresno', 
+                'sacramento', 'san diego', 'las vegas', 'phoenix', 'denver', 'seattle', 'portland'];
+            
+            const ets2Keywords = ['france', 'allemagne', 'italie', 'espagne', 'royaume-uni', 'pologne', 'euro', '€',
+                'paris', 'berlin', 'rome', 'madrid', 'londres', 'varsovie', 'amsterdam', 'bruxelles', 'prague',
+                'vienne', 'budapest', 'stockholm', 'oslo', 'copenhague', 'helsinki'];
+            
+            // Noms spécifiques aux colonnes
+            const atsColumnKeywords = ['weight lb', 'pounds', 'miles', 'gallons', 'mph'];
+            const ets2ColumnKeywords = ['poids kg', 'tonnes', 'kilomètres', 'litres', 'km/h'];
+            
+            // Vérification des mots-clés de colonnes
+            if (atsColumnKeywords.some(keyword => rowString.includes(keyword))) {
+                return 'ats';
+            }
+            if (ets2ColumnKeywords.some(keyword => rowString.includes(keyword))) {
+                return 'ets2';
+            }
+            
+            // Vérification des villes et pays
+            if (atsKeywords.some(keyword => rowString.includes(keyword))) {
+                return 'ats';
+            }
+            if (ets2Keywords.some(keyword => rowString.includes(keyword))) {
+                return 'ets2';
+            }
+            
+            // Par défaut, on considère que c'est ETS2
+            return 'ets2';
+        }
+
+        document.querySelectorAll('input[name="gameFilter"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                displayFilteredData(e.target.value);
+            });
+        });
+
+        document.getElementById('csvFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(event) {
+                const csvData = event.target.result;
+                const lines = csvData.split('\n').filter(line => line.trim());
+                
+                if (lines.length > 0) {
+                    document.querySelector('.table-container').classList.add('visible');
+
+                    const headers = parseCSVLine(lines[0]).map(header => 
+                        header.replace(/^\"|\"$/g, '').replace(/^[a-zA-Z]+:/i, '')
+                    );
+
+                    const headerRow = document.getElementById('headerRow');
+                    headerRow.innerHTML = '';
+                    const visibleHeaders = [];
+                    headers.forEach((header, index) => {
+                        if (!header.toLowerCase().includes('remorque')) {
+                            const th = document.createElement('th');
+                            th.textContent = header;
+                            headerRow.appendChild(th);
+                            visibleHeaders.push(index);
+                        }
+                    });
+
+                    currentData = [];
+                    for (let i = 1; i < lines.length; i++) {
+                        const cells = parseCSVLine(lines[i]);
+                        const rowData = [];
+                        
+                        visibleHeaders.forEach(index => {
+                            let value = cells[index].replace(/^\"|\"$/g, '');
+                            
+                            const headerText = headers[index].toLowerCase();
+                            if (headerText.includes('plaque')) {
+                                value = cleanLicensePlate(value);
+                            } else if (headerText === 'consommation moyenne') {
+                                value = formatConsumption(value);
+                            } else if (headerText.includes('temps pris')) {
+                                value = secondsToMinutes(parseInt(value));
+                            } else if (value.match(/^(\d{4})-(\d{2})-(\d{2})$/)) {
+                                value = formatDate(value);
+                            }
+                            
+                            rowData.push(value);
+                        });
+                        
+                        currentData.push(rowData);
+                    }
+
+                    // Mettre à jour les filtres et afficher les données
+                    updateFirstColumnFilters();
+                    const currentFilter = document.querySelector('input[name="gameFilter"]:checked').value;
+                    displayFilteredData(currentFilter);
+                }
+            };
+
+            reader.readAsText(file);
+        });
+    </script>
+</body>
+</html>
